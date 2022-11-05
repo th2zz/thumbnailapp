@@ -1,0 +1,26 @@
+ARG PYTHON_BASE_IMAGE=python:3.11.0-slim
+ARG BUILDER_BASE_IMAGE=omelet034/python-3.11.0-slim-poetry:latest
+
+# stage 1
+FROM ${BUILDER_BASE_IMAGE} as builder
+COPY ./poetry.lock ./pyproject.toml /application_root/
+WORKDIR /application_root
+RUN poetry install --no-interaction --no-root --without dev
+
+# stage 2 build the production image
+# disable buffering of stdout stdin, disable pycache, copy built files, start up script, set up user, use user <app>, Document the exposed port 
+FROM ${PYTHON_BASE_IMAGE} as prod-image
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/application_root
+WORKDIR /application_root
+COPY --from=builder /application_root/.venv /application_root/.venv
+COPY ./scripts/run.sh /application_server/run.sh
+COPY /app /application_root/app/
+RUN addgroup --system app && adduser --system --group app && \
+    chown app:app -R /application_root && \
+    chown app:app -R /application_server && \
+    chmod +x /application_server/run.sh /application_root/.venv/bin/activate 
+USER app
+CMD /application_server/run.sh -w 1 -h 0.0.0.0 -p 8080
+EXPOSE 8080

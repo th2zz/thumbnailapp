@@ -1,0 +1,27 @@
+# This is a base image: add poetry to a python image
+# https://hub.docker.com/_/python
+ARG OFFICIAL_PYTHON_IMAGE
+FROM ${OFFICIAL_PYTHON_IMAGE}
+ARG POETRY_VERSION
+ENV PIP_NO_CACHE_DIR=off \
+  PIP_DISABLE_PIP_VERSION_CHECK=on \
+  PIP_DEFAULT_TIMEOUT=100 \
+  PYTHONUNBUFFERED=1 \
+  PYTHONDONTWRITEBYTECODE=1 \
+  PYTHONPATH=/application_root \
+  POETRY_VERSION=${POETRY_VERSION} \
+  POETRY_HOME="/opt/poetry" \
+  POETRY_VIRTUALENVS_IN_PROJECT=true \
+  VIRTUAL_ENVIRONMENT_PATH="/application_root/.venv"
+
+ENV PATH="$VIRTUAL_ENVIRONMENT_PATH/bin:$POETRY_HOME/bin:$PATH"
+
+# https://python-poetry.org/docs/#osx--linux--bashonwindows-install-instructions
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y \
+  build-essential \
+  curl \
+  && curl -sSL https://install.python-poetry.org | python - \
+  && apt-get purge --auto-remove -y \
+  build-essential \
+  curl

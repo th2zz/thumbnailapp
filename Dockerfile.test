@@ -1,0 +1,18 @@
+# This dockerfile builds a test image and run all tests
+ARG PYTHON_BASE_IMAGE=python:3.11.0-slim
+ARG BUILDER_BASE_IMAGE=omelet034/python-3.11.0-slim-poetry:latest
+
+FROM ${BUILDER_BASE_IMAGE} as builder
+COPY ./poetry.lock ./pyproject.toml /application_root/
+WORKDIR /application_root
+RUN poetry install --no-interaction --no-root
+
+FROM ${PYTHON_BASE_IMAGE} as test-image
+WORKDIR /application_root
+COPY ./poetry.lock ./pyproject.toml /application_root/
+COPY --from=builder /application_root/.venv /application_root/.venv
+COPY ./scripts/test.sh /application_server/test.sh
+COPY /app /application_root/app/
+COPY /tests /application_root/tests/
+RUN chmod +x /application_server/test.sh
+CMD ["/application_server/test.sh", "/application_root/tests", "--cov=app", "--cov-report=term-missing"]

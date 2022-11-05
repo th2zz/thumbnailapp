@@ -1,0 +1,10 @@
+.venv
+.coverage
+.gitignore
+Makefile
+Dockerfile.test
+Dockerfile.dev
+Dockerfile.prod
+README.md
+test_coverage_reports/
+.pre-commit-config.yaml
