@@ -17,7 +17,8 @@ WORKDIR /application_root
 COPY --from=builder /application_root/.venv /application_root/.venv
 COPY ./scripts/run.sh /application_server/run.sh
 COPY /app /application_root/app/
-RUN addgroup --system app && adduser --system --group app && \
+RUN apt install python-celery-common && \
+    addgroup --system app && adduser --system --group app && \
     chown app:app -R /application_root && \
     chown app:app -R /application_server && \
     chmod +x /application_server/run.sh /application_root/.venv/bin/activate 

@@ -18,7 +18,7 @@ _push:
 _pull:
 	docker pull ${IMAGE-NAME-HASH-TAGGED}
 _run:
-	docker run ${IMAGE-NAME-HASH-TAGGED}
+	docker run -p 8080:8080 ${IMAGE-NAME-HASH-TAGGED}
 _release_latest:
 	docker pull ${IMAGE-NAME-HASH-TAGGED}
 	docker tag  ${IMAGE-NAME-HASH-TAGGED} ${IMAGE-NAME-LATEST-TAGGED}
@@ -52,6 +52,7 @@ build_%:
 push_%:
 	$(MAKE) _push \
 			-e _BUILD_TAG="$*-${GIT_HASH}"
+# pull latest dev / test / prod according to most recent git hash
 pull_%:
 	$(MAKE) _pull \
 			-e _BUILD_TAG="$*-${GIT_HASH}"
@@ -59,6 +60,7 @@ pull_%:
 run_latest:
 	$(MAKE) _run \
 			-e _BUILD_TAG=${_LATEST_TAG}
+# run latest dev / prod / test image
 run_%:
 	$(MAKE) _run \
 			-e _BUILD_TAG="$*-${GIT_HASH}"
