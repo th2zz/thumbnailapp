@@ -73,6 +73,10 @@ pull_%:
 run_latest:
 	$(MAKE) _run \
 			-e _BUILD_TAG=${_LATEST_TAG}
+# run latest prod
+run:
+	$(MAKE) run_prod \
+			-e _BUILD_TAG="$*-${GIT_HASH}"
 # run latest dev / prod / test image
 run_%:
 	$(MAKE) _run \

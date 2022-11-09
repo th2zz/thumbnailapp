@@ -7,6 +7,11 @@ from requests import Response
 from starlette import status
 
 
+def test_health(test_client: TestClient):
+    response = test_client.get('/health')
+    assert response.status_code == status.HTTP_200_OK
+
+
 def test_root(test_client: TestClient):
     response: Response = test_client.get("/")
     assert response.status_code == status.HTTP_200_OK
@@ -33,12 +38,12 @@ def test_upload_download_task(test_client: TestClient):
                       'multipart/form-data')}
     data = {"Button": "Submit"}
     response = test_client.post('/files/', files=files, data=data)
-    assert response.status_code == 202
+    assert response.status_code == status.HTTP_202_ACCEPTED
     resp_json = response.json()
     assert resp_json == {"message": f"{file_name} upload task submitted."}
     # test download: compare content with generated random content
     response = test_client.get(f'/files/{file_name}')
-    assert response.status_code == 200
+    assert response.status_code == status.HTTP_200_OK
     assert response.text == random_content
     # delete all mock files locally
     for _, _, files in os.walk(mock_files_dir):
