@@ -1,5 +1,7 @@
-# This is a base image: add poetry to a python image
+# This is a base image for multi-stage build
+# it adds poetry to a python image
 # https://hub.docker.com/_/python
+# https://python-poetry.org/docs
 ARG OFFICIAL_PYTHON_IMAGE
 FROM ${OFFICIAL_PYTHON_IMAGE}
 ARG POETRY_VERSION
@@ -13,10 +15,8 @@ ENV PIP_NO_CACHE_DIR=off \
   POETRY_HOME="/opt/poetry" \
   POETRY_VIRTUALENVS_IN_PROJECT=true \
   VIRTUAL_ENVIRONMENT_PATH="/application_root/.venv"
-
 ENV PATH="$VIRTUAL_ENVIRONMENT_PATH/bin:$POETRY_HOME/bin:$PATH"
 
-# https://python-poetry.org/docs/#osx--linux--bashonwindows-install-instructions
 RUN apt-get update \
   && apt-get install --no-install-recommends -y \
   build-essential \

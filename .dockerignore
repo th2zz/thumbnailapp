@@ -5,6 +5,9 @@ Makefile
 Dockerfile.test
 Dockerfile.dev
 Dockerfile.prod
+Dockerfile.base
+venv
+.pytest_cache
 README.md
 test_coverage_reports/
 .pre-commit-config.yaml

@@ -1,10 +1,11 @@
 ARG PYTHON_BASE_IMAGE=python:3.11.0-slim
+# any python image with poetry installed
 ARG BUILDER_BASE_IMAGE=omelet034/python-3.11.0-slim-poetry:latest
 
 # stage 1
 FROM ${BUILDER_BASE_IMAGE} as builder
-COPY ./poetry.lock ./pyproject.toml /application_root/
-WORKDIR /application_root
+COPY ./poetry.lock ./pyproject.toml /app_root/
+WORKDIR /app_root
 RUN poetry install --no-interaction --no-root --without dev
 
 # stage 2 build the production image
@@ -12,16 +13,16 @@ RUN poetry install --no-interaction --no-root --without dev
 FROM ${PYTHON_BASE_IMAGE} as prod-image
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/application_root
-WORKDIR /application_root
-COPY --from=builder /application_root/.venv /application_root/.venv
-COPY ./scripts/run.sh /application_server/run.sh
-COPY /app /application_root/app/
+    PYTHONPATH=/app_root
+WORKDIR /app_root
+COPY --from=builder /app_root/.venv /app_root/.venv
+COPY ./scripts/run.sh /app_server/run.sh
+COPY /app /app_root/app/
 RUN apt install python-celery-common && \
     addgroup --system app && adduser --system --group app && \
-    chown app:app -R /application_root && \
-    chown app:app -R /application_server && \
-    chmod +x /application_server/run.sh /application_root/.venv/bin/activate 
+    chown app:app -R /app_root && \
+    chown app:app -R /app_server && \
+    chmod +x /app_server/run.sh /app_root/.venv/bin/activate 
 USER app
-CMD /application_server/run.sh -w 1 -h 0.0.0.0 -p 8080
+CMD /app_server/run.sh -w 1 -h 0.0.0.0 -p 8080
 EXPOSE 8080

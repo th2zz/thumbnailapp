@@ -5,7 +5,6 @@ This project uses:
 - [Poetry](https://python-poetry.org/): for dependency management
 - [FastAPI](https://fastapi.tiangolo.com/): as web framework
 - [uvicorn](https://www.uvicorn.org/): as server program
-- [pytest-bdd](https://pypi.org/project/pytest-bdd/): for integration test
 - [pytest](https://pypi.org/project/pytest/): for unit testing
 - [pytest-cov](https://pypi.org/project/pytest-cov/): for coverage report
 - [pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks) for pre-commit code check
@@ -15,6 +14,13 @@ This project uses:
 
 ## Dependencies Management:
 
+This project use poetry for dependencies management.
+
+- install poetry locally
+  - refer to [offcial doc](https://python-poetry.org/docs/) or use the following command
+    ```shell
+    make install_poetry
+    ```
 - install all dependencies
   - ```shell
     make build_dep
@@ -34,7 +40,7 @@ This project uses:
   - ```shell
     make build_dev
     ```
-- build test image (used for running unit test in container)
+- build test image (used for running unit test in a dedicated container)
   - ```shell
     make build_test
     ```
@@ -43,26 +49,24 @@ This project uses:
     make build_prod
     ```
 
-## Run application:
+## Run Application:
 
-- locally
+- locally (no container)
   - ```shell
-    poetry run uvicorn --workers 1 --host 0.0.0.0 --port 8080 app.main:app
+    make run_local
     ```
 - in container
-
   - ```shell
-    make run_prod  # run latest prod level container
+    make run_prod  # run latest prod level image
     ```
 
-## Run tests
+## Run Tests
 
-- locally
+- locally (no container)
   - ```shell
     make test_local
     ```
-- in container
-
+- in container (build a test image first and then run it)
   - ```shell
     make test
     ```
