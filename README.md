@@ -9,6 +9,34 @@ This project uses:
 - [pytest-cov](https://pypi.org/project/pytest-cov/): for coverage report
 - [pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks) for pre-commit code check
 - [black](https://github.com/psf/black) for pre-commit code formatting
+- [prometheus_client](https://github.com/prometheus/client_python) and [prometheus-fastapi-instrumentator](https://github.com/trallnag/prometheus-fastapi-instrumentator) for basic metrics
+
+# Architecture
+
+```
+                                                        On POST file
+                                                        BackgroundTasks: Read file stream chunk by chunk
+                                                                         and write to local path
+  POST /files/     ┌──────────────────────────┐            ▲             (Thread pool based)
+────────────────►  │                          │            │           │
+                   │    FastAPI backend       │            │           │
+────────────────►  │                          ├────────────┘           │
+  GET /files/<name>└──────────────────────────┘                        │
+                                                                       │
+                                                                       │
+                                                                       ▼
+                                                   ┌─────────────────────────────────┐
+                                                   │                                 │
+                                                   │                                 │
+                                                   │   CephFileSystem (shared)       │
+                                                   │   managed by Rook Ceph Operator │
+                                                   │                                 │
+                                                   └─────────────────────────────────┘
+```
+
+# Caveat
+
+- authentication is not implemented
 
 # Quick Start
 
