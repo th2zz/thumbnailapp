@@ -1,5 +1,5 @@
 DOCKER_USERNAME ?= omelet034
-IMAGE_REPO_NAME ?= thumbnail-app
+IMAGE_REPO_NAME ?= simple-fs
 GIT_HASH ?= $(shell git log --format="%h" -n 1)
 _BUILD_TAG ?= ${GIT_HASH}
 _LATEST_TAG ?= latest
