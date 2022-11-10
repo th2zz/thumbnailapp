@@ -1,7 +1,22 @@
+# Table of contents
+
+- [Intro](#intro)
+- [Architecture](#architecture)
+- [Caveat](#caveat)
+- [Quick Start](#quick-start)
+  - [Dependencies Management:](#dependencies-management)
+  - [Run Application:](#run-application)
+  - [Run Tests](#run-tests)
+- [Deployment Guide](#deployment-guide)
+  - [Prerequsite](#prerequsite)
+  - [Deployment Example Procedures](#deployment-example-procedures)
+
 # Intro
 
 This project uses:
 
+- [rook](https://rook.io/) for ceph provision and management, cephfs is used as the PVC-based backend storage.
+  - ceph is a highly scalable distributed file system, refer to [this doc](https://docs.ceph.com/en/quincy/) for further details.
 - [Poetry](https://python-poetry.org/): for dependency management
 - [FastAPI](https://fastapi.tiangolo.com/): as web framework
 - [uvicorn](https://www.uvicorn.org/): as server program
@@ -123,7 +138,7 @@ This project use poetry for dependencies management.
     - using cloud server with block storage attached and mounted
     - use hypervisors like hyperv, vmware
 
-## Deployment Example Procedure
+## Deployment Example Procedures
 
 Following example uses docker as minikube driver.
 
@@ -223,11 +238,35 @@ overlay                                                                         
 tmpfs                                                                                                               64M     0   64M   0% /dev
 10.107.214.86:6789:/volumes/csi/csi-vol-e02e9d6f-60fd-11ed-864d-0242ac110007/714e5586-219e-4110-94d9-058da2d8d778  1.0G     0  1.0G   0% /data
 
-# run the test script k8s/test_client.py
+# pip install requests
 python3 -m pip install requests
-root@vultr:~# python3 test_client.py --url http://192.168.49.2:30010
+
+
+# run the test client: generate random file for upload & download and compare content
+root@vultr:~/simplefs# python3 k8s/test_client.py --url http://192.168.49.2:30010
 input argument: url=http://192.168.49.2:30010
 start testing ...
+uploaded file name:  b89594b9-885d-4536-8686-6f6f3c6285be
+uploaded file content: 7ad666f4-b83a-4111-a47c-93620da5683e
+downloaded file content: 7ad666f4-b83a-4111-a47c-93620da5683e
 test finished! No errors output on screen means passed!
-root@vultr:~#
+root@vultr:~/simplefs# kubectl exec pod/simple-fs-75cc8ff788-c88xx -- ls -la /data/simplefs_data
+total 8
+drwxr-sr-x 2 app  app 15 Nov 10 16:34 .
+drwxrwsr-x 3 root app  1 Nov 10 16:22 ..
+-rw-r--r-- 1 app  app 36 Nov 10 16:31 010be347-1722-4f52-886b-617a62882182
+-rw-r--r-- 1 app  app 36 Nov 10 16:31 1ad449ef-35b4-4434-968a-062cd6a19739
+-rw-r--r-- 1 app  app 36 Nov 10 16:25 21e85844-3cb9-4e58-9722-29a519ef319b
+-rw-r--r-- 1 app  app 36 Nov 10 16:27 27fd3611-4d23-4f69-9724-3d337e6cf0a9
+-rw-r--r-- 1 app  app 36 Nov 10 16:31 3ee1a7e5-05ea-4d0a-81ba-67c06a9eaf9c
+-rw-r--r-- 1 app  app 36 Nov 10 16:30 58d27608-6173-4b21-8451-996d93b8f9de
+-rw-r--r-- 1 app  app 36 Nov 10 16:33 62dd73f5-0c9a-4a2f-bd30-69721f6ac837
+-rw-r--r-- 1 app  app 36 Nov 10 16:31 78bb93f6-e31b-49e1-8a18-9cf319c86d60
+-rw-r--r-- 1 app  app 36 Nov 10 16:24 9c4dc78b-a0cd-4e8d-a67f-a8ebf021effe
+-rw-r--r-- 1 app  app 36 Nov 10 16:33 b636f87d-6731-4938-9843-ed1e9d2a2f88
+-rw-r--r-- 1 app  app 36 Nov 10 16:34 b89594b9-885d-4536-8686-6f6f3c6285be
+-rw-r--r-- 1 app  app 36 Nov 10 16:31 c7d975cb-47ea-42c1-bfb1-d4797e0dc37f
+-rw-r--r-- 1 app  app 36 Nov 10 16:33 d79d5000-205c-4c55-a155-9ab5ae1684ca
+-rw-r--r-- 1 app  app 36 Nov 10 16:28 f9965205-9539-43bc-add6-ad9a75d707a9
+-rw-r--r-- 1 app  app 36 Nov 10 16:31 ff077cde-1bd8-4004-95bb-b22f42332cb2
 ```

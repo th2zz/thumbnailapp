@@ -1,3 +1,4 @@
+# This test client create a random file for upload & download, and it compares the result
 import argparse
 import os
 import uuid
