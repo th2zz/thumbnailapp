@@ -1,14 +1,13 @@
 import argparse
 import os
 import uuid
+from time import sleep
 
 import requests
 
 parser = argparse.ArgumentParser(description='test client args parser')
-
 parser.add_argument('--url', required=True, type=str)
-
-args = parser.parse_args()    # 4. 引数を解析
+args = parser.parse_args()
 
 URL = args.url
 
@@ -35,16 +34,20 @@ def main():
     assert response.status_code == 202
     resp_json = response.json()
     assert resp_json == {"message": f"{file_name} upload task submitted."}
+    sleep(3)
     # test download: compare content with generated random content
     response = test_client.get(os.path.join(URL, 'files', file_name))
     assert response.status_code == 200
+    print("uploaded file name: ", file_name)
+    print("uploaded file content:", random_content)
+    print("downloaded file content:", response.text)
     assert response.text == random_content
     # delete all mock files locally
     for _, _, files in os.walk(mock_files_dir):
         for file in files:
             mock_file = os.path.join(mock_files_dir, file)
             os.remove(mock_file)
-    print("test finished! No errors output on screen means passed!")
+    print("test finished! No errors on screen means passed!")
 
 
 if __name__ == "__main__":
