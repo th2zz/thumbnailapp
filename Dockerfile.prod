@@ -18,10 +18,11 @@ WORKDIR /app_root
 COPY --from=builder /app_root/.venv /app_root/.venv
 COPY ./scripts/run.sh /app_server/run.sh
 COPY /app /app_root/app/
-RUN addgroup --system app && adduser --system --group app && \
+RUN groupadd -r -g 1001 app && \ 
+    useradd -r -u 1001 -g 1001 app && \
     chown app:app -R /app_root && \
     chown app:app -R /app_server && \
     chmod +x /app_server/run.sh /app_root/.venv/bin/activate 
-USER app
+USER 1001
 CMD /app_server/run.sh -w 1 -h 0.0.0.0 -p 8080
 EXPOSE 8080
