@@ -30,7 +30,6 @@ spec:
     spec:
       containers:
       - image: omelet034/simple-fs:latest
-        imagePullPolicy: IfNotPresent
         name: simple-fs
         ports:
         - containerPort: 8080
