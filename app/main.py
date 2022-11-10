@@ -20,7 +20,7 @@ logging.config.fileConfig(LOGGING_CONF_PATH,
                           disable_existing_loggers=False)
 # root level logger
 logger = logging.getLogger(__name__)
-default_storage_dir = os.path.join("/tmp", "py_file_server_data")
+default_storage_dir = os.path.join("/data", "simplefs_data")
 os.makedirs(default_storage_dir, exist_ok=True)
 STORAGE_ROOT = os.environ.get("STORAGE_ROOT", default_storage_dir)
 FILE_READ_BATCH_SIZE = os.environ.get("FILE_READ_BATCH_SIZE", 100000)
