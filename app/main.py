@@ -4,14 +4,18 @@ import logging.config
 import os
 import shutil
 
-from fastapi import BackgroundTasks, FastAPI, Path, UploadFile, status
+import validators
+from celery.result import AsyncResult
+from fastapi import BackgroundTasks, FastAPI, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from prometheus_client import Gauge
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from app.models import HealthStatus, ResponseMessage
-from app.utils import file_upload_task
+from app.constants import (DEFAULT_READ_BATCH_SIZE, DEFAULT_STORAGE_DIR,
+                           SUPPORTED_IMG_EXTENSIONS)
+from app.models import HealthStatus, ResponseMessage, Thumbnail
+from app.worker import resize_image_task
 
 CURR_FILE_PATH = os.path.abspath(__file__)
 LOGGING_CONF_PATH = os.path.join(os.path.dirname(CURR_FILE_PATH),
@@ -20,11 +24,11 @@ logging.config.fileConfig(LOGGING_CONF_PATH,
                           disable_existing_loggers=False)
 # root level logger
 logger = logging.getLogger(__name__)
-default_storage_dir = os.path.join("/data", "simplefs_data")
-os.makedirs(default_storage_dir, exist_ok=True)
-STORAGE_ROOT = os.environ.get("STORAGE_ROOT", default_storage_dir)
-FILE_READ_BATCH_SIZE = os.environ.get("FILE_READ_BATCH_SIZE", 100000)
-DISK_USAGE_THRESHOLD = os.environ.get("DISK_USAGE_THRESHOLD", 95)
+os.makedirs(DEFAULT_STORAGE_DIR, exist_ok=True)
+# This is a unified storage path for both api server and worker
+STORAGE_ROOT = os.environ.get("STORAGE_ROOT", DEFAULT_STORAGE_DIR)
+FILE_READ_BATCH_SIZE = os.environ.get("FILE_READ_BATCH_SIZE",
+                                      DEFAULT_READ_BATCH_SIZE)
 app = FastAPI()
 disk_used = Gauge(
     "disk_used",
@@ -51,7 +55,7 @@ async def health_check():
         disk_used.labels(disk_used).set(percentage_used)
         return percentage_used
     instrument_disk_usage()
-    return {"status": "alive"}
+    return JSONResponse({"status": "alive"})
 
 
 @app.on_event("startup")
@@ -61,48 +65,65 @@ async def startup():
 
 @app.get("/", status_code=status.HTTP_200_OK)
 async def root() -> HTMLResponse:
-    html_content = """
-<body>
-<h1>File Upload</h1>
-<form action="/files/" enctype="multipart/form-data" method="post">
-<input name="file" type="file">
-<input type="submit">
-</form>
-</body>
-    """
-    return HTMLResponse(content=html_content)
+    response = {"message": f"Hello World!"}
+    return JSONResponse(response)
 
 
-@app.get("/files/{name}", status_code=status.HTTP_200_OK)
-async def download_file(name: str = Path(title="The name of the file to download")) -> FileResponse:
-    """GET the file with the given name, asynchronously streams a file as the response.
-
-    Args:
-        name (str): file name
-
-    Returns:
-        FileResponse: https://fastapi.tiangolo.com/advanced/custom-response/#fileresponse
-    """
-    response = FileResponse(
-        path=os.path.join(STORAGE_ROOT, name),
-        filename=f"download_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{name}"
-    )
-    return response
+@app.get("/tasks/{task_id}")
+def get_status(task_id):
+    task_result = AsyncResult(task_id)
+    result = {
+        "task_id": task_id,
+        "task_status": task_result.status,
+        "task_result": task_result.result
+    }
+    return JSONResponse(result)
 
 
-@app.post("/files/", response_model=ResponseMessage, status_code=status.HTTP_202_ACCEPTED)
-async def upload_file(file: UploadFile, background_tasks: BackgroundTasks):
-    """ upload a file by post. Content-Type: multipart/form-data
+@app.get("/thumbnail/", status_code=status.HTTP_200_OK)
+async def get_thumbnail(task_id: str = Query(default=..., max_length=50), response_model=Thumbnail) -> JSONResponse:
+    """GET the thumbnail download link by task id
+    /thumbnail/?task_id=dasfsji12j3o12
 
     Args:
-        file: UploadFile a much faster mechanism from FastAPI for Content-Type: multipart/form-data
-            https://fastapi.tiangolo.com/tutorial/request-files/#file-parameters-with-uploadfile
+        task_id (str): thumbnail creation task_id 
 
     Returns:
-        dict: response message json
+        JSONResponse: json response
     """
-    storage_path = os.path.join(STORAGE_ROOT, file.filename)
-    logger.info(f"saving file {storage_path}")
-    background_tasks.add_task(file_upload_task, file_handle=file.file,
-                              storage_path=storage_path, read_batch_size=FILE_READ_BATCH_SIZE)
-    return {"message": f"{file.filename} upload task submitted."}
+    # TODO check task finished or not, if finished, return file response otherwise ? union type on model?
+    #
+    response = {}
+    return JSONResponse(response)
+
+
+@app.post("/thumbnail/", response_model=ResponseMessage, status_code=status.HTTP_202_ACCEPTED)
+async def create_thumbnail(thumbnail: Thumbnail, background_tasks: BackgroundTasks, response: Response) -> JSONResponse:
+    """create a 100x100 thumbnail from an image
+
+    Args:
+        background_tasks (BackgroundTasks): this method will add background tasks using fast api built-in BackgroundTasks
+        feature
+
+    Returns:
+        JSONResponse: json response
+    """
+    if not thumbnail.source_image_url:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return JSONResponse({"message": f"{thumbnail.source_image_url} source_image_url is empty."})
+    if not validators.url(thumbnail.source_image_url):  # malformed url
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return JSONResponse({"message": f"{thumbnail.source_image_url} source_image_url is not an valid url."})
+    source_file_name = os.path.basename(thumbnail.source_image_url)
+    extension = source_file_name.split('.')[-1]
+    if extension.lower() not in SUPPORTED_IMG_EXTENSIONS:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        resp_dict = {
+            "message": f"{thumbnail.source_image_url} source_image_url is invalid: supported image extensions: {SUPPORTED_IMG_EXTENSIONS}."}
+        return JSONResponse(resp_dict)
+    storage_path = os.path.join(STORAGE_ROOT)
+    logger.info(f"will save {source_file_name} to {storage_path}")
+    task = resize_image_task.delay(source_image_url=thumbnail.source_image_url,
+                                   storage_path=storage_path)
+    response = {"task_id": task.id}
+    return JSONResponse(response)

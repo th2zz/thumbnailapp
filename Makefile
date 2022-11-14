@@ -1,6 +1,6 @@
 # change these 2 variables to make sure images built are push to a right place
 DOCKER_USERNAME ?= omelet034
-IMAGE_REPO_NAME ?= simple-fs
+IMAGE_REPO_NAME ?= thumbnail-app
 # this variable will fetch the latest commit hash 
 GIT_HASH ?= $(shell git log --format="%h" -n 1)
 # most recent git commit hash is used as part of the image tag
