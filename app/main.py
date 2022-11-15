@@ -1,13 +1,14 @@
 # coding=utf-8
+import io
 import logging.config
 import os
 import shutil
+from base64 import b64decode
 
 import validators
-from celery.result import AsyncResult
 from fastapi import FastAPI, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from prometheus_client import Gauge
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -19,6 +20,12 @@ from app.models import (HealthStatus, ResponseMessage, ThumbnailRequestBody,
 from app.utils import MongoConnector
 from app.worker import resize_image_task
 
+# This is a unified storage path for both api server and worker
+STORAGE_ROOT = os.environ.get("STORAGE_ROOT", DEFAULT_STORAGE_DIR)
+FILE_READ_BATCH_SIZE = os.environ.get("FILE_READ_BATCH_SIZE",
+                                      DEFAULT_READ_BATCH_SIZE)
+MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017/")
+
 CURR_FILE_PATH = os.path.abspath(__file__)
 LOGGING_CONF_PATH = os.path.join(os.path.dirname(CURR_FILE_PATH),
                                  'logging.conf')
@@ -26,11 +33,6 @@ logging.config.fileConfig(LOGGING_CONF_PATH,
                           disable_existing_loggers=False)
 # root level logger
 logger = logging.getLogger(__name__)
-os.makedirs(DEFAULT_STORAGE_DIR, exist_ok=True)
-# This is a unified storage path for both api server and worker
-STORAGE_ROOT = os.environ.get("STORAGE_ROOT", DEFAULT_STORAGE_DIR)
-FILE_READ_BATCH_SIZE = os.environ.get("FILE_READ_BATCH_SIZE",
-                                      DEFAULT_READ_BATCH_SIZE)
 app = FastAPI()
 disk_used = Gauge(
     "disk_used",
@@ -47,10 +49,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017/")
-MONGO_CLIENT = MongoConnector(MONGO_URL, MONOGO_DB_NAME)
-TASKS_COLLECTION = MONGO_CLIENT.collection(TASKS_COLLECTION_NAME)
-THUMBNAILS_COLLECTION = MONGO_CLIENT.collection(THUMBNAILS_COLLECTION_NAME)
+MONGO_CLIENT = MongoConnector(MONGO_URL)
+TASKS_COLLECTION = MONGO_CLIENT.get_collection(MONOGO_DB_NAME,
+                                               TASKS_COLLECTION_NAME)
+THUMBNAILS_COLLECTION = MONGO_CLIENT.get_collection(MONOGO_DB_NAME,
+                                                    THUMBNAILS_COLLECTION_NAME)
+os.makedirs(STORAGE_ROOT, exist_ok=True)
 
 
 @app.get("/health", response_model=HealthStatus, status_code=status.HTTP_200_OK)
@@ -66,7 +70,7 @@ async def health_check():
 
 @app.on_event("startup")
 async def startup():
-    Instrumentator().instrument(app).expose(app)
+    Instrumentator().instrument(app).expose(app)  # pragma: no cover
 
 
 @app.get("/", status_code=status.HTTP_200_OK)
@@ -75,47 +79,62 @@ async def root() -> JSONResponse:
     return JSONResponse(response)
 
 
-@app.get("/tasks/{task_id}")
-def get_status(task_id):
-    task_result = AsyncResult(task_id)
-    result = {
-        "task_id": task_id,
-        "task_status": task_result.status,
-        "task_result": task_result.result
-    }
-    return JSONResponse(result)
-
-
-@app.get("/thumbnail/", status_code=status.HTTP_200_OK)
-async def get_thumbnail(task_id: str = Query(default=..., max_length=50),
-                        response_model=ThumbnailResponse) -> JSONResponse:
-    """GET the thumbnail download link by task id
-    /thumbnail/?task_id=dasfsji12j3o12
+@app.get("/thumbnail/file", response_model=ResponseMessage, status_code=status.HTTP_200_OK)
+async def get_thumbnail_file(response: Response, task_id: str = Query(default=..., max_length=50)):
+    """GET the thumbnail file by task id
+    /thumbnail/file?task_id=dasfsji12j3o12
 
     Args:
         task_id (str): thumbnail creation task_id 
 
     Returns:
+        StreamingResponse: thumbnail image file
+    """
+    doc = TASKS_COLLECTION.find_one({"task_id": task_id})
+    if not doc:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return JSONResponse({"message": f"Failed to get thumbnail: task {task_id} not found."})
+    if not doc['completed']:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return JSONResponse({"message": f"Failed to get thumbnail: task {task_id} not completed."})
+    sha256 = doc["source_file_sha256"]
+    doc = THUMBNAILS_COLLECTION.find_one({"sha256hex": sha256})
+    base64_bytes_str: str = doc["base64_thumbnail"]
+    img_bytes: bytes = b64decode(base64_bytes_str)
+    return StreamingResponse(io.BytesIO(img_bytes), media_type="image/jpeg")
+
+
+@app.get("/thumbnail", response_model=ThumbnailResponse, status_code=status.HTTP_200_OK)
+async def get_thumbnail(response: Response, task_id: str = Query(default=..., max_length=50)) -> JSONResponse:
+    """GET the thumbnail data in a Json Response
+    /thumbnail?task_id=dasfsji12j3o12
+
+    Args:
+        task_id (str): thumbnail creation task_id query string
+
+    Returns:
         JSONResponse: json response
     """
-    task_result = AsyncResult(task_id)
-    if not task_result.successful():
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return JSONResponse({"message": f"Failed to get thumbnail: task status is not SUCCESS.",
-                            "task_id": task_id, "status": task_result.status, "base64_thumbnail_data": ""})
+
     doc = TASKS_COLLECTION.find_one({"task_id": task_id})
     if not doc:
         response.status_code = status.HTTP_404_NOT_FOUND
         return JSONResponse({"message": f"Failed to get thumbnail: failed to find documents with associated task_id.",
-                            "task_id": task_id, "status": task_result.status, "base64_thumbnail_data": ""})
+                            "task_id": task_id, "celery_task_status": "", "base64_thumbnail_data": ""})
+    if not doc['completed']:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return JSONResponse({"message": f"Failed to get thumbnail: task not completed.",
+                            "task_id": task_id, "celery_task_status": "SUCCESS",
+                             "base64_thumbnail_data": ""})
     sha256 = doc["source_file_sha256"]
-    doc = THUMBNAILS_COLLECTION.find_one({"source_file_sha256": sha256})
+    doc = THUMBNAILS_COLLECTION.find_one({"sha256hex": sha256})
     response = {"message": "ok", "task_id": task_id,
-                "status": task_result.status, "base64_thumbnail_data": doc["base64_thumbnail"]}
+                "celery_task_status": "SUCCESS",
+                "base64_thumbnail_data": doc["base64_thumbnail"]}
     return JSONResponse(response)
 
 
-@app.post("/thumbnail/", response_model=ResponseMessage, status_code=status.HTTP_202_ACCEPTED)
+@app.post("/thumbnail", response_model=ResponseMessage, status_code=status.HTTP_200_OK)
 async def create_thumbnail(thumbnail: ThumbnailRequestBody, response: Response) -> JSONResponse:
     """create a 100x100 thumbnail from an image
 
@@ -140,7 +159,7 @@ async def create_thumbnail(thumbnail: ThumbnailRequestBody, response: Response) 
         return JSONResponse(resp_dict)
     storage_path = os.path.join(STORAGE_ROOT)
     logger.info(f"will save {source_file_name} to {storage_path}")
-    task = resize_image_task.delay(source_image_url=thumbnail.source_image_url,
+    task = resize_image_task.delay(source_image_url=thumbnail.source_image_url.strip(),
                                    storage_path=storage_path)
-    response = {"task_id": task.id}
-    return JSONResponse(response)
+    response.status_code = status.HTTP_200_OK
+    return JSONResponse({"task_id": task.id})

@@ -15,6 +15,9 @@ PYTHON_BASE_IMAGE ?= python:3.11.0-slim
 POETRY_BASE_IMAGE ?= python-3.11.0-slim-poetry
 POETRY_BASE_IMAGE_DOCKERFILE ?= Dockerfile.base
 POETRY_BASE_IMAGE_LATEST ?= ${DOCKER_USERNAME}/${POETRY_BASE_IMAGE}:${_LATEST_TAG}
+WORKER_IMAGE_NAME ?= thumbnail-app-worker
+WORKER_IMAGE_DOCKERFILE ?= Dockerfile.worker
+WORKER_IMAGE_LATEST ?= ${DOCKER_USERNAME}/${WORKER_IMAGE_NAME}:${_LATEST_TAG}
 
 _build:
 	docker build -t ${IMAGE-NAME-HASH-TAGGED} -f ${_DOCKERFILE} .
@@ -43,6 +46,12 @@ prepare_base_image:
 	docker build --build-arg OFFICIAL_PYTHON_IMAGE=${PYTHON_BASE_IMAGE} \
 					-t ${POETRY_BASE_IMAGE_LATEST} -f ${POETRY_BASE_IMAGE_DOCKERFILE} .
 	docker push ${POETRY_BASE_IMAGE_LATEST}
+prepare_worker_image:
+	docker build --build-arg OFFICIAL_PYTHON_IMAGE=${PYTHON_BASE_IMAGE} \
+					-t ${WORKER_IMAGE_LATEST} -f ${WORKER_IMAGE_DOCKERFILE} .
+	docker push ${WORKER_IMAGE_LATEST}
+run_worker:
+	docker run ${WORKER_IMAGE_LATEST}
 build_all:
 	$(MAKE) build_dev
 	$(MAKE) build_test
@@ -56,6 +65,7 @@ release_all:
 	$(MAKE) build_all
 	$(MAKE) push_all
 	$(MAKE) release_latest_prod
+	$(MAKE) prepare_worker_image
 # dynammic target: 
 # for example, build_dev will build an image with tag dev-<githash> using dockerfile Dockerfile.dev
 build_%:

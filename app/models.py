@@ -16,5 +16,5 @@ class ThumbnailRequestBody(BaseModel):
 class ThumbnailResponse(BaseModel):
     message: str
     task_id: str
-    status: str
+    celery_task_status: str  # refer to celery AsyncResult
     base64_thumbnail_data: str
