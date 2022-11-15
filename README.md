@@ -64,6 +64,8 @@ endpoints
 # Caveat
 
 - authentication is not implemented
+- client (e.g. frontend) should check file size before thumbnail creation request
+- [TTL indexes](https://www.mongodb.com/docs/manual/core/index-ttl/) can be created to automatically clean up documents in collection
 
 # Quick Start
 

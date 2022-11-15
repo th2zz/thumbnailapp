@@ -1,20 +1,22 @@
 # coding=utf-8
-import datetime
 import logging.config
 import os
 import shutil
 
 import validators
 from celery.result import AsyncResult
-from fastapi import BackgroundTasks, FastAPI, Query, Response, status
+from fastapi import FastAPI, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from prometheus_client import Gauge
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.constants import (DEFAULT_READ_BATCH_SIZE, DEFAULT_STORAGE_DIR,
-                           SUPPORTED_IMG_EXTENSIONS)
-from app.models import HealthStatus, ResponseMessage, Thumbnail
+                           MONOGO_DB_NAME, SUPPORTED_IMG_EXTENSIONS,
+                           TASKS_COLLECTION_NAME, THUMBNAILS_COLLECTION_NAME)
+from app.models import (HealthStatus, ResponseMessage, ThumbnailRequestBody,
+                        ThumbnailResponse)
+from app.utils import MongoConnector
 from app.worker import resize_image_task
 
 CURR_FILE_PATH = os.path.abspath(__file__)
@@ -45,6 +47,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017/")
+MONGO_CLIENT = MongoConnector(MONGO_URL, MONOGO_DB_NAME)
+TASKS_COLLECTION = MONGO_CLIENT.collection(TASKS_COLLECTION_NAME)
+THUMBNAILS_COLLECTION = MONGO_CLIENT.collection(THUMBNAILS_COLLECTION_NAME)
 
 
 @app.get("/health", response_model=HealthStatus, status_code=status.HTTP_200_OK)
@@ -64,7 +70,7 @@ async def startup():
 
 
 @app.get("/", status_code=status.HTTP_200_OK)
-async def root() -> HTMLResponse:
+async def root() -> JSONResponse:
     response = {"message": f"Hello World!"}
     return JSONResponse(response)
 
@@ -81,7 +87,8 @@ def get_status(task_id):
 
 
 @app.get("/thumbnail/", status_code=status.HTTP_200_OK)
-async def get_thumbnail(task_id: str = Query(default=..., max_length=50), response_model=Thumbnail) -> JSONResponse:
+async def get_thumbnail(task_id: str = Query(default=..., max_length=50),
+                        response_model=ThumbnailResponse) -> JSONResponse:
     """GET the thumbnail download link by task id
     /thumbnail/?task_id=dasfsji12j3o12
 
@@ -91,19 +98,29 @@ async def get_thumbnail(task_id: str = Query(default=..., max_length=50), respon
     Returns:
         JSONResponse: json response
     """
-    # TODO check task finished or not, if finished, return file response otherwise ? union type on model?
-    #
-    response = {}
+    task_result = AsyncResult(task_id)
+    if not task_result.successful():
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return JSONResponse({"message": f"Failed to get thumbnail: task status is not SUCCESS.",
+                            "task_id": task_id, "status": task_result.status, "base64_thumbnail_data": ""})
+    doc = TASKS_COLLECTION.find_one({"task_id": task_id})
+    if not doc:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return JSONResponse({"message": f"Failed to get thumbnail: failed to find documents with associated task_id.",
+                            "task_id": task_id, "status": task_result.status, "base64_thumbnail_data": ""})
+    sha256 = doc["source_file_sha256"]
+    doc = THUMBNAILS_COLLECTION.find_one({"source_file_sha256": sha256})
+    response = {"message": "ok", "task_id": task_id,
+                "status": task_result.status, "base64_thumbnail_data": doc["base64_thumbnail"]}
     return JSONResponse(response)
 
 
 @app.post("/thumbnail/", response_model=ResponseMessage, status_code=status.HTTP_202_ACCEPTED)
-async def create_thumbnail(thumbnail: Thumbnail, background_tasks: BackgroundTasks, response: Response) -> JSONResponse:
+async def create_thumbnail(thumbnail: ThumbnailRequestBody, response: Response) -> JSONResponse:
     """create a 100x100 thumbnail from an image
 
     Args:
-        background_tasks (BackgroundTasks): this method will add background tasks using fast api built-in BackgroundTasks
-        feature
+
 
     Returns:
         JSONResponse: json response

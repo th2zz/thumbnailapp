@@ -9,6 +9,12 @@ class HealthStatus(BaseModel):
     status: str
 
 
-class Thumbnail(BaseModel):
+class ThumbnailRequestBody(BaseModel):
     source_image_url: str
-    download_url: str
+
+
+class ThumbnailResponse(BaseModel):
+    message: str
+    task_id: str
+    status: str
+    base64_thumbnail_data: str
