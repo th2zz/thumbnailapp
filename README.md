@@ -1,7 +1,23 @@
 # Table of contents
 
+- [Intro](#intro)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+  - [Usage Example](#usage-example)
+    - [docker compose](#docker-compose)
+    - [Create a new thumbnail](#create-a-new-thumbnail)
+    - [Get a thumbnail file by task id](#get-a-thumbnail-file-by-task-id)
+    - [Get thumbnail info json by task id](#get-thumbnail-info-json-by-task-id)
+  - [Dependencies Management](#dependencies-management)
+  - [Build Docker image](#build-docker-image)
+  - [Run Application Server Individually](#run-application-server-individually)
+  - [Run Celery Worker Individually](#run-celery-worker-individually)
+  - [Run Tests](#run-tests)
+- [Things to Notice / Improve](#things-to-notice---improve)
+
 # Intro
 
+Name: Tinghe Zhang Email: tzhang329@gmail.com
 This project uses:
 
 - [mongodb](https://www.mongodb.com/) for storing auxillary tasks info and thumbnail base64 data
@@ -71,7 +87,42 @@ endpoints
 
 # Quick Start
 
-## Dependencies Management:
+## Usage Example
+
+### docker compose
+
+```
+docker-compose up
+```
+
+### Create a new thumbnail
+
+Create a new thumbnail, response will have a generated celery task id, you can use it to look up status or fetch result
+
+```shell
+root@LAPTOP-4PFU6A8D:~/thumbnailapp# curl -X POST http://localhost:8080/thumbnail -H "Content-Type: application/json" -d '{"source_image_url": "https://pyxis.nymag.com/v1/imgs/55b/438/d732205198d1fc4b0aafc8bb302e4e68c2-john-wick.rsquare.w330.jpg"}'
+{"task_id":"6381c22b-2b21-498e-bca7-af9cc864c1eb"}
+```
+
+### Get a thumbnail file by task id
+
+```
+root@LAPTOP-4PFU6A8D:~/thumbnailapp# curl http://localhost:8080/thumbnail/file?task_id=6381c22b-2b21-498e-bca7-af9cc864c1eb > abc.jpeg
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  3013    0  3013    0     0   588k      0 --:--:-- --:--:-- --:--:--  588k
+```
+
+### Get thumbnail info json by task id
+
+reponse is a json containing thumbnail bytes encoded in base64 string format
+
+```
+root@LAPTOP-4PFU6A8D:~# curl http://localhost:8080/thumbnail?task_id=15bda50a-0f9a-4a3b-8449-cc7c9bc0452e
+{"message":"ok","task_id":"15bda50a-0f9a-4a3b-8449-cc7c9bc0452e","status":"SUCCESS","base64_thumbnail_data":"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"}
+```
+
+## Dependencies Management
 
 This project use poetry for dependencies management.
 
@@ -93,7 +144,7 @@ This project use poetry for dependencies management.
     make dump_dep
     ```
 
-## Build Docker image:
+## Build Docker image
 
 - build dev image for the server
   - ```shell
@@ -112,7 +163,7 @@ This project use poetry for dependencies management.
     make prepare_worker_image
     ```
 
-## Run Application Server Individually:
+## Run Application Server Individually
 
 - locally (no container)
   - ```shell
@@ -123,7 +174,7 @@ This project use poetry for dependencies management.
     make run_prod  # run latest prod level image
     ```
 
-## Run Celery Worker Individually:
+## Run Celery Worker Individually
 
 - locally
   - ```shell
@@ -144,35 +195,6 @@ This project use poetry for dependencies management.
   - ```shell
     make test
     ```
-
-# Usage Example
-
-## Create a new thumbnail
-
-Create a new thumbnail, response will have a generated celery task id, you can use it to look up status or fetch result
-
-```shell
-root@LAPTOP-4PFU6A8D:~/thumbnailapp# curl -X POST http://localhost:8080/thumbnail -H "Content-Type: application/json" -d '{"source_image_url": "https://pyxis.nymag.com/v1/imgs/55b/438/d732205198d1fc4b0aafc8bb302e4e68c2-john-wick.rsquare.w330.jpg"}'
-{"task_id":"6381c22b-2b21-498e-bca7-af9cc864c1eb"}
-```
-
-## Get a thumbnail file by task id
-
-```
-root@LAPTOP-4PFU6A8D:~/thumbnailapp# curl http://localhost:8080/thumbnail/file?task_id=15bda50a-0f9a-4a3b-8449-cc7c9bc0452e > hehe.jpeg
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-100  3013    0  3013    0     0   588k      0 --:--:-- --:--:-- --:--:--  588k
-```
-
-## Get thumbnail info json by task id
-
-reponse is a json containing thumbnail bytes encoded in base64 string format
-
-```
-root@LAPTOP-4PFU6A8D:~# curl http://localhost:8080/thumbnail?task_id=15bda50a-0f9a-4a3b-8449-cc7c9bc0452e
-{"message":"ok","task_id":"15bda50a-0f9a-4a3b-8449-cc7c9bc0452e","status":"SUCCESS","base64_thumbnail_data":"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"}
-```
 
 # Things to Notice / Improve
 

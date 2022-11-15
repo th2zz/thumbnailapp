@@ -1,4 +1,4 @@
-ARG PYTHON_BASE_IMAGE=python:3.11.0-slim
+ARG PYTHON_BASE_IMAGE=omelet034/python-3.11.0-slim-poetry:latest
 # any python image with poetry installed
 ARG BUILDER_BASE_IMAGE=omelet034/python-3.11.0-slim-poetry:latest
 
@@ -15,6 +15,7 @@ ENV PYTHONUNBUFFERED=1 \
   PYTHONDONTWRITEBYTECODE=1 \
   PYTHONPATH=/app_root
 WORKDIR /app_root
+COPY ./poetry.lock ./pyproject.toml /app_root/
 COPY --from=builder /app_root/.venv /app_root/.venv
 COPY ./scripts/run.sh /app_server/run.sh
 COPY /app /app_root/app/
@@ -24,4 +25,4 @@ RUN groupadd -r -g 1001 app && \
   chown app:app -R /app_server && \
   chmod +x /app_server/run.sh /app_root/.venv/bin/activate 
 USER 1001
-CMD celery -A app.worker.celery worker --loglevel=info
+CMD poetry run celery -A app.worker.celery worker --loglevel=info

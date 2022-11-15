@@ -1,4 +1,4 @@
-version: '3'
+version: '3.9'
 
 services:
   redis:
@@ -11,12 +11,20 @@ services:
       - "27017:27017"
   app:
     image: omelet034/thumbnail-app:latest
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - CELERY_BROKER_URL=redis://redis:6379
     ports:
       - "8080:8080"
     depends_on:
       - mongo
+      - redis
   worker:
     image: omelet034/thumbnail-app-worker:latest
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379
+      - MONGO_URL=mongodb://mongo:27017
     depends_on:
       - redis
       - mongo
+      - app
