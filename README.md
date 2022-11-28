@@ -23,7 +23,7 @@ This project uses:
 - [mongodb](https://www.mongodb.com/) for storing auxillary tasks info and thumbnail base64 data
 - [pillow](https://pillow.readthedocs.io/) for image resize
 - [celery](https://github.com/celery/celery): as task queue framework
-- [redis](https://redis.io/) as celery broker and result backend
+- [redis](https://redis.io/) as celery broker
 - [Poetry](https://python-poetry.org/): for dependency management
 - [FastAPI](https://fastapi.tiangolo.com/): as web framework
 - [uvicorn](https://www.uvicorn.org/): as server program
@@ -64,7 +64,7 @@ GET                                                                             
                                             1. download image from url [This is the only part that write to disk]
                                             2. compute sha256 of the image
                                             3. if there is a document with the same
-                                               hash, create an new entry in mongo tasks collection
+                                               hash, create a new entry in mongo tasks collection
                                                mark as complete and return to avoid recomputation
                                             4. if this is a brand new image, resize it and
                                                store {"sha256hex": <sha256>, "base64_thumbnail":
@@ -198,6 +198,8 @@ This project use poetry for dependencies management.
 
 # Things to Notice / Improve
 
+- RESTful API should be versioned in production setting for better evolvability and backward compatibility
+- since we are downloading images to disk in worker. If we are using kubernetes, a separate cron job / sidecar will be needed to clean up downloaded images regularly otherwise the volume will blow up
 - Authentication is not implemented
 - prometheus /metrics endpoint is exposed
   - a couple of basic metrics are included such as http_requests_total, http_request_size_bytes, http_request_duration_seconds, disk_usage ... etc.
