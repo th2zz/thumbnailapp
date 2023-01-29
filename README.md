@@ -17,7 +17,6 @@
 
 # Intro
 
-Name: Tinghe Zhang Email: tzhang329@gmail.com
 This project uses:
 
 - [mongodb](https://www.mongodb.com/) for storing auxillary tasks info and thumbnail base64 data
